@@ -1,0 +1,64 @@
+---
+services:
+  gitlab:
+    container_name: 'gitlab'
+    image: "${GITLAB_IMAGE}:${GITLAB_IMAGE_TAG}"
+    restart: 'unless-stopped'
+    env_file:
+      - './.env'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url "${GITLAB_URL}"
+        nginx['enable'] = true
+        nginx['listen_addresses'] = ["0.0.0.0"]
+        nginx['listen_https'] = true
+        nginx['listen_port'] = 443
+        nginx['redirect_http_to_https'] = true
+        nginx['referrer_policy'] = 'same-origin'
+        letsencrypt['auto_renew_day_of_month'] = "*/7"
+        letsencrypt['auto_renew_hour'] = "12"
+        letsencrypt['auto_renew_minute'] = "30"
+        letsencrypt['auto_renew'] = true
+        letsencrypt['contact_emails'] = ["${GITLAB_ADMIN_EMAIL}"]
+        letsencrypt['enable'] = true
+        gitlab_rails['gitlab_shell_ssh_port'] = 22
+        gitlab_rails['omniauth_allow_single_sign_on'] = ['saml']
+        gitlab_rails['omniauth_auto_link_saml_user'] = true
+        gitlab_rails['omniauth_block_auto_created_users'] = false
+        gitlab_rails['omniauth_providers'] = [
+          {
+            name: 'saml',
+            label: 'SSO',
+            args: {
+              assertion_consumer_service_url: "${GITLAB_SSO_ASSERTION_CONSUMER_SERVICE_URL}",
+              idp_cert_fingerprint: "${GITLAB_SSO_IDP_CERT_FINGERPRINT}",
+              idp_sso_target_url: "${GITLAB_SSO_IDP_SSO_TARGET_URL}",
+              issuer: "${GITLAB_SSO_ISSUER}",
+              name_identifier_format: "${GITLAB_SSO_NAME_IDENTIFIER_FORMAT}"
+            }
+          }
+        ]
+        gitlab_kas['enable'] = true
+        postgresql['enable'] = true
+        prometheus_monitoring['enable'] = false
+        registry['enable'] = false
+    networks:
+      - 'gitlab-network'
+    ports:
+      - '22:22'
+      - '80:80'
+      - '443:443'
+    volumes:
+      - './gitlab-data:/var/opt/gitlab'
+      - './gitlab-logs:/var/log/gitlab'
+      - './gitlab-config:/etc/gitlab'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 240s
+
+networks:
+  gitlab-network:
+    external: true
